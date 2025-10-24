@@ -24,15 +24,23 @@ farmer_table=sqlalchemy.Table(
 
 )
 
-buyer_table=sqlalchemy.Table(
+buyer_table = sqlalchemy.Table(
     "buyers",
     metadata,
-    sqlalchemy.Column("user_id",sqlalchemy.ForeignKey("users.id"),primary_key=True),
-    sqlalchemy.Column("crop_id",sqlalchemy.ForeignKey("transactions.planted_crop_id")),
-    sqlalchemy.Column("sold_price",sqlalchemy.ForeignKey("transactions.purchase_price")),
-    sqlalchemy.Column("location",sqlalchemy.String),
-
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), primary_key=True),
+    sqlalchemy.Column("location", sqlalchemy.String),
+    sqlalchemy.Column("total_sold_price", sqlalchemy.Integer, default=0),  # total sum of all purchases
 )
+
+buyer_purchases_table = sqlalchemy.Table(
+    "buyer_purchases",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, autoincrement=True),
+    sqlalchemy.Column("buyer_id", sqlalchemy.ForeignKey("buyers.user_id")),
+    sqlalchemy.Column("crop_id", sqlalchemy.ForeignKey("transactions.planted_crop_id")),
+    sqlalchemy.Column("sold_price", sqlalchemy.Integer)
+)
+
 
 land_table=sqlalchemy.Table(
     "land",

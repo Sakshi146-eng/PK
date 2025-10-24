@@ -83,3 +83,11 @@ class TransactionCreate(BaseModel):
 class PurchaseOffer(BaseModel):
     buyer_id: int
     purchase_price: int  # buyer's offer
+
+class TransactionOut(BaseModel):
+    id: int
+    buyer_id: Optional[int]=None
+    planted_crop_id: int
+    selling_price: int
+    purchase_price: int
+    buy: bool

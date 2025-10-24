@@ -34,8 +34,6 @@ class Farmer(BaseModel):
 # ---------------------------
 
 class Buyer(BaseModel):
-    user_id: int
-    crop_id: Optional[int] = None
-    sold_price: Optional[int] = None
     location: str
+    total_sold_price: Optional[int] = None
 

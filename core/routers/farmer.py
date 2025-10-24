@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends
-from models.models import LandIn, CropGrowthIn,TransactionCreate, PurchaseOffer
-from database import land_table, database, crop_table, planted_crop_table, crop_growth_table, transaction_table, buyer_table
+from models.models import LandIn, CropGrowthIn,TransactionCreate, PurchaseOffer, TransactionOut, Crop
+from database import land_table, database, crop_table, planted_crop_table, crop_growth_table, transaction_table, buyer_table, buyer_purchases_table
 from datetime import date
 from typing import List
 
@@ -90,9 +90,9 @@ async def move_harvest_ready_crops():
             buy=False,
         )
         txn_id = await database.execute(insert_query)
-        created_transactions.append(txn_id)
+        created_transactions.append(crop.id)
 
-    return {"message": "Transactions created for harvested crops", "transaction_ids": created_transactions}
+    return {"message": "Transactions created for harvested crops", "crop_ids": created_transactions}
 
 
 # ---------------------------
@@ -118,7 +118,7 @@ async def set_selling_price(planted_crop_id: int, data: TransactionCreate):
     )
     await database.execute(update_query)
 
-    return {"message": "Selling price set successfully"}
+    return {"message": "Selling price set successfully for crop ID: " + str(planted_crop_id)}
 
 
 # ---------------------------
@@ -134,7 +134,10 @@ async def make_offer(planted_crop_id: int, offer: PurchaseOffer):
     transaction = await database.fetch_one(query)
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    if not offer.buyer_id in await database.fetch_all("SELECT user_id FROM buyers"):
+    query = "SELECT user_id FROM buyers WHERE user_id = :buyer_id"
+    buyer = await database.fetch_one(query, {"buyer_id": offer.buyer_id})
+
+    if not buyer:
         raise HTTPException(status_code=400, detail="Invalid buyer ID")
 
     update_query = (
@@ -149,7 +152,7 @@ async def make_offer(planted_crop_id: int, offer: PurchaseOffer):
     
     await database.execute(update_query)
 
-    return {"message": "Offer placed successfully"}
+    return {"message": "Offer placed successfully for crop ID: " + str(planted_crop_id)}
 
 
 # ---------------------------
@@ -178,15 +181,26 @@ async def accept_offer(planted_crop_id: int):
     )
     await database.execute(update_query)
 
-    # Record this purchase in buyer_profile table
-    # (Assuming buyer_profile has columns: buyer_id, crop_id, and total_spent or sold_price)
-    insert_profile_query = buyer_table.insert().values(
+   # Step 3: Insert the purchase record
+    insert_purchase = buyer_purchases_table.insert().values(
         buyer_id=transaction["buyer_id"],
         crop_id=transaction["planted_crop_id"],
         sold_price=transaction["purchase_price"]
-    )
-    await database.execute(insert_profile_query)
+   ) 
+    await database.execute(insert_purchase)
 
+   # Step 4: Update the buyer’s total sold price
+    buyer_query = buyer_table.select().where(buyer_table.c.user_id == transaction["buyer_id"])
+    buyer = await database.fetch_one(buyer_query)
+
+    if buyer:
+        new_total = (buyer["total_sold_price"] or 0) + transaction["purchase_price"]
+        update_buyer = (
+            buyer_table.update()
+            .where(buyer_table.c.user_id == transaction["buyer_id"])
+            .values(total_sold_price=new_total)
+       )
+        await database.execute(update_buyer)
     return {
         "message": "Offer accepted. Transaction completed successfully.",
         "buyer_id": transaction["buyer_id"],
@@ -199,11 +213,18 @@ async def accept_offer(planted_crop_id: int):
 # 5️⃣ View All Active Transactions
 # ---------------------------
 
-@router.get("/transactions/", response_model=List[dict])
+@router.get("/transactions/", response_model=List[TransactionOut])
 async def list_transactions():
-    """
-    Returns all active transactions (where buy = False)
-    """
     query = transaction_table.select().where(transaction_table.c.buy == False)
     transactions = await database.fetch_all(query)
-    return transactions
+    return [dict(t) for t in transactions]
+
+@router.get("/crops/", response_model=List[Crop])
+async def get_all_crops():
+    """
+    Fetch and return all crops present in the crop_table.
+    These are predefined crops like Wheat, Rice, Corn, etc.
+    """
+    query = crop_table.select()
+    crops = await database.fetch_all(query)
+    return [dict(c) for c in crops]

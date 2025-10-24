@@ -25,7 +25,7 @@ async def register_user(user:User):
         farmer_query=farmer_table.insert().values(user_id=created_user.id,  age=None, aadhar_id=None, location=None)
         await database.execute(farmer_query)
     elif user.role=="buyer":
-        buyer_query=buyer_table.insert().values(user_id=created_user.id, crop_id=None, sold_price=None, location=None)
+        buyer_query=buyer_table.insert().values(user_id=created_user.id, location=None, total_sold_price=0)
         await database.execute(buyer_query)
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role specified")
@@ -49,6 +49,7 @@ async def get_user_by_id(user_id:int):
 async def update_farmer(user_id:int, farmer:Farmer,current_user:Annotated[User,Depends(get_current_user)]):
     if not await get_user_by_id(user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
     query=farmer_table.update().where(farmer_table.c.user_id==user_id).values(**farmer.dict())
     await database.execute(query)
     return {"message":"Farmer updated successfully"}
